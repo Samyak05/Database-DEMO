@@ -1,47 +1,49 @@
-# 🔐 Corporate VPD Demonstration Script (Final Evaluation Flow)
+# 🔐 Context-Aware Virtual Private Database (VPD) Demo
 
-This project demonstrates:
+This document provides a complete step-by-step demonstration of:
 
-✔ Role-Based Access Control (RBAC)  
-✔ Virtual Private Database (PostgreSQL RLS)  
-✔ Context-Aware Security using session variables  
-✔ Location-Based Write Restriction  
-✔ Row-Level Audit Logging  
-✔ Separation of Duties (Auditor Role)  
+- Role-Based Access Control (RBAC)
+- Row-Level Security (Virtual Private Database behavior)
+- Location-Based Access Control
+- Write Auditing (INSERT / UPDATE / DELETE)
+- Separation of Duties (Auditor role)
 
-This script is designed for a 10–12 minute live evaluation.
+---
 
-------------------------------------------------------------
-🟢 PART 1 — System Setup (1 minute)
-------------------------------------------------------------
+# 🧭 DEMONSTRATION FLOW
 
-Login as superuser:
+We will demonstrate:
+
+1. Initial Setup Verification
+2. Virtual Private Database (RLS)
+3. Location-Based Access Restriction
+4. Auditing Proof
+5. Policy Enforcement Blocking
+
+---
+
+# 1️⃣ INITIAL VERIFICATION
+
+## Login as Database Administrator
 
 ```bash
 psql -U postgres -d corporate_db
 ```
 
-Show tables:
+Verify tables exist:
 
 ```sql
 \dt
 ```
 
-Say:
-"This is the corporate database schema including business tables and audit infrastructure."
-
-Clear old logs:
+Reset audit logs for clean demonstration:
 
 ```sql
 TRUNCATE audit_logs;
 SELECT * FROM audit_logs;
 ```
 
-Expected:
-0 rows
-
-Say:
-"The audit log is clean before demonstration."
+Expected: No rows.
 
 Exit:
 
@@ -49,11 +51,13 @@ Exit:
 \q
 ```
 
-------------------------------------------------------------
-🟢 PART 2 — Virtual Private Database (RLS) (3 minutes)
-------------------------------------------------------------
+---
 
-🔹 Step 1: HR Access
+# 2️⃣ VIRTUAL PRIVATE DATABASE (ROW-LEVEL SECURITY)
+
+## 🔹 Case A: HR Access
+
+Login:
 
 ```bash
 psql -U app_hr -d corporate_db
@@ -68,7 +72,7 @@ SET app.department = 'HR';
 SET app.location = 'Internal';
 ```
 
-Run:
+Query employees:
 
 ```sql
 SELECT emp_id, emp_name, department
@@ -76,23 +80,29 @@ FROM employees
 ORDER BY emp_id;
 ```
 
-Expected:
-Only HR department rows.
+Expected Result:
+✔ Only HR department employees visible.
 
-Say:
-"Even though this table contains multiple departments, RLS dynamically filters rows based on role and department. This simulates a Virtual Private Database."
+Explanation:
+RLS filters rows dynamically based on role and department.
 
-Exit.
+Exit:
+
+```sql
+\q
+```
 
 ---
 
-🔹 Step 2: Manager Access
+## 🔹 Case B: Manager Access
+
+Login:
 
 ```bash
 psql -U app_manager -d corporate_db
 ```
 
-Bind:
+Bind context:
 
 ```sql
 SET app.username = 'manager1';
@@ -109,17 +119,23 @@ FROM employees
 ORDER BY emp_id;
 ```
 
-Expected:
-Only Sales department employees.
+Expected Result:
+✔ Only Sales department employees visible.
 
-Say:
-"Same query, different result. Security enforcement occurs at database layer."
+Explanation:
+Same query, different output → Virtual Private Database behavior.
 
-Exit.
+Exit:
+
+```sql
+\q
+```
 
 ---
 
-🔹 Step 3: Employee Self Access
+## 🔹 Case C: Employee Access
+
+Login:
 
 ```bash
 psql -U app_employee -d corporate_db
@@ -140,19 +156,22 @@ Run:
 SELECT * FROM employees;
 ```
 
-Expected:
-Only Alice’s row visible.
+Expected Result:
+✔ Only Alice's row visible.
 
-Say:
-"Employee can access only their own record."
+Exit:
 
-Exit.
+```sql
+\q
+```
 
-------------------------------------------------------------
-🟢 PART 3 — Location-Based Enforcement (3 minutes)
-------------------------------------------------------------
+---
 
-🔹 Case 1: Manager Internal Update (Allowed)
+# 3️⃣ LOCATION-BASED ACCESS CONTROL
+
+## 🔹 Case A: Internal Modification (Allowed)
+
+Login:
 
 ```bash
 psql -U app_manager -d corporate_db
@@ -167,31 +186,28 @@ SET app.department = 'Sales';
 SET app.location = 'Internal';
 ```
 
-Run:
+Attempt update:
 
 ```sql
-BEGIN;
-
 UPDATE employees
 SET salary = salary + 500
 WHERE department = 'Sales';
-
-COMMIT;
 ```
 
 Expected:
-UPDATE 3
+✔ Update successful.
 
-Say:
-"Internal location allows modification as defined in UPDATE policy."
+Exit:
 
-Exit.
+```sql
+\q
+```
 
 ---
 
-🔹 Case 2: Manager External Update (Blocked)
+## 🔹 Case B: External Modification (Blocked)
 
-Login again:
+Login:
 
 ```bash
 psql -U app_manager -d corporate_db
@@ -206,7 +222,7 @@ SET app.department = 'Sales';
 SET app.location = 'External';
 ```
 
-Run:
+Attempt update:
 
 ```sql
 UPDATE employees
@@ -215,18 +231,24 @@ WHERE department = 'Sales';
 ```
 
 Expected:
-Blocked (no rows updated or permission denied via RLS).
+❌ Permission denied due to location-based RLS policy.
 
-Say:
-"Location is evaluated dynamically inside RLS policy. External access prevents modification."
+Exit:
 
-Exit.
+```sql
+\q
+```
 
-------------------------------------------------------------
-🟢 PART 4 — Auditing & Forensic Proof (3–4 minutes)
-------------------------------------------------------------
+Explanation:
+Location attribute is evaluated dynamically inside RLS policy.
 
-🔹 Step 1: Perform Valid HR Update
+---
+
+# 4️⃣ AUDITING DEMONSTRATION
+
+## 🔹 Step 1: Perform Valid Modification
+
+Login as HR:
 
 ```bash
 psql -U app_hr -d corporate_db
@@ -241,7 +263,7 @@ SET app.department = 'HR';
 SET app.location = 'Internal';
 ```
 
-Run:
+Execute:
 
 ```sql
 UPDATE employees
@@ -249,17 +271,23 @@ SET salary = salary + 1000
 WHERE department = 'HR';
 ```
 
-Exit.
+Exit:
+
+```sql
+\q
+```
 
 ---
 
-🔹 Step 2: Auditor Verifies Logs
+## 🔹 Step 2: Auditor Verification
+
+Login as Auditor:
 
 ```bash
 psql -U app_auditor -d corporate_db
 ```
 
-Run:
+Check audit logs:
 
 ```sql
 SELECT audit_id,
@@ -273,40 +301,26 @@ ORDER BY audit_id;
 ```
 
 Expected:
-Entries for:
-- Manager UPDATE (Internal)
-- HR UPDATE
 
-Say:
-"Each row modification generates a separate audit entry. This ensures fine-grained accountability."
+✔ UPDATE entries recorded  
+✔ Correct user_id logged  
+✔ Timestamp present  
+✔ One entry per modified row  
+
+Explanation:
+Triggers log every successful INSERT / UPDATE / DELETE.
+
+Exit:
+
+```sql
+\q
+```
 
 ---
 
-🔹 Step 3: Prove Manager Cannot View Logs
+# 5️⃣ POLICY ENFORCEMENT TEST (Unauthorized Modification)
 
-```bash
-psql -U app_manager -d corporate_db
-```
-
-Run:
-
-```sql
-SELECT * FROM audit_logs;
-```
-
-Expected:
-Permission denied.
-
-Say:
-"Operational users cannot inspect audit records. This enforces separation of duties."
-
-Exit.
-
-------------------------------------------------------------
-🟢 PART 5 — Unauthorized Attempt Demonstration
-------------------------------------------------------------
-
-Login as employee:
+Login as Employee:
 
 ```bash
 psql -U app_employee -d corporate_db
@@ -321,7 +335,7 @@ SET app.department = 'Sales';
 SET app.location = 'Internal';
 ```
 
-Run:
+Attempt unauthorized update:
 
 ```sql
 UPDATE employees
@@ -329,29 +343,42 @@ SET salary = 999999;
 ```
 
 Expected:
-Blocked by RLS.
+❌ Blocked by RLS.
 
-Say:
-"Modification blocked by policy. Since operation did not succeed, no audit entry is created. This highlights current auditing scope — successful writes only."
+Explanation:
+Authorization occurs before execution.
+Triggers do not run when RLS blocks access.
 
-------------------------------------------------------------
-🎯 FINAL CONCLUSION (Say This Clearly)
-------------------------------------------------------------
+Exit:
 
-"This system enforces context-aware access control using session-bound attributes including role, department, and location. Row-level security ensures department-level and user-level data isolation, while trigger-based auditing ensures accountability. Enforcement occurs entirely at the database layer, independent of application logic."
+```sql
+\q
+```
 
-------------------------------------------------------------
-✅ What This Demonstrates
-------------------------------------------------------------
+---
 
-✔ Role-Based Access Control  
-✔ Virtual Private Database behavior (RLS)  
-✔ Dynamic context binding  
-✔ Location-based enforcement  
-✔ Row-level auditing  
-✔ Separation of operational and audit roles  
-✔ Secure database-layer enforcement  
+# 🔐 SECURITY FEATURES DEMONSTRATED
 
-------------------------------------------------------------
-END OF DEMONSTRATION
-------------------------------------------------------------
+✔ Authentication via DB Roles  
+✔ Authorization via GRANT statements  
+✔ Context-aware filtering via RLS  
+✔ Department-based data isolation  
+✔ Location-based modification control  
+✔ Trigger-based write auditing  
+✔ Separation of duties (Auditor role)  
+
+---
+
+# 🎯 FINAL STATEMENT
+
+This system enforces access control entirely at the database layer using:
+
+- PostgreSQL Role-Based Access
+- Row-Level Security (VPD simulation)
+- Session-bound contextual attributes
+- Location-aware policy enforcement
+- Trigger-based auditing
+
+Security decisions are evaluated dynamically at query execution time, independent of application logic.
+
+---
